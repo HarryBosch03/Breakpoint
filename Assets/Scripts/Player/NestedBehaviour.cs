@@ -3,9 +3,9 @@ using UnityEngine;
 
 public abstract class NestedBehaviour
 {
-    public GameObject Context { get; private set; }
+    public MonoBehaviour Context { get; private set; }
 
-    public NestedBehaviour (GameObject context)
+    public NestedBehaviour (MonoBehaviour context)
     {
         Context = context;
     }

@@ -5,6 +5,7 @@ using UnityEngine;
 
 [SelectionBase]
 [DisallowMultipleComponent]
+[RequireComponent(typeof(Rigidbody))]
 public sealed class Projectile : MonoBehaviour
 {
     [SerializeField] GameObject impactPrefab;
@@ -15,6 +16,7 @@ public sealed class Projectile : MonoBehaviour
 
     public float Speed { get; set; }
     public float Damage { get; set; }
+    public GameObject Shooter { get; set; }
 
     private void Awake()
     {
@@ -32,6 +34,12 @@ public sealed class Projectile : MonoBehaviour
 
         if (Physics.Raycast(rigidbody.position, rigidbody.velocity, out var hit, speed * Time.deltaTime + 0.02f, 0b1))
         {
+            var health = hit.transform.GetComponentInParent<Damagable>();
+            if (health)
+            {
+                health.Damage(new DamageArgs(Damage, Shooter, hit.point, rigidbody.velocity.normalized, hit.normal));
+            }
+
             DestroyWithStyle(hit.point, hit.normal);
         }
 

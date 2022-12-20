@@ -10,11 +10,24 @@ public sealed class SingleFireWeapon : Weapon
     [SerializeField] ProjectileWeaponEffect effect;
     [SerializeField] SingleFireWeaponTrigger trigger;
     [SerializeField] AimWeaponEffect aiming;
+    [SerializeField] WeaponSway sway;
+
+    protected override void Awake()
+    {
+        base.Awake();
+
+        sway.Root = Root;
+    }
 
     public override void WeaponLoop()
     {
         CheckPrimaryFire();
         CheckSeccondaryFire();
+    }
+
+    private void LateUpdate()
+    {
+        sway.LateLoop();
     }
 
     private void CheckPrimaryFire()
@@ -24,7 +37,7 @@ public sealed class SingleFireWeapon : Weapon
         effect.Execute(this);
         trigger.OnFire();
 
-        Animator.Play("Fire");
+        Animator.Play("Fire", 0, 0.0f);
     }
 
     private void CheckSeccondaryFire()

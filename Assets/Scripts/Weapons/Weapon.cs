@@ -1,5 +1,4 @@
 using System;
-using Unity.Android.Types;
 using Unity.Burst;
 using UnityEngine;
 
@@ -10,6 +9,7 @@ public abstract class Weapon : MonoBehaviour
     [SerializeField] Animator animator;
     [SerializeField] Transform muzzle;
     [SerializeField] float equipTime;
+    [SerializeField] Transform root;
 
     [Space]
     [SerializeField] float viewmodelFOV;
@@ -19,6 +19,7 @@ public abstract class Weapon : MonoBehaviour
 
     public Animator Animator => animator;
     public Transform Muzzle => muzzle;
+    public Transform Root => root;
 
     public bool PrimaryFire { get; set; }
     public bool SeccondaryFire { get; set; }
@@ -26,7 +27,7 @@ public abstract class Weapon : MonoBehaviour
 
     public abstract void WeaponLoop();
 
-    private void Awake()
+    protected virtual void Awake()
     {
         biped = GetComponentInParent<IBipedal>();
     }
@@ -51,14 +52,22 @@ public abstract class Weapon : MonoBehaviour
         animator.SetBool("grounded", biped.IsGrounded);
     }
 
-    public void Holster()
+    public Coroutine Holster()
     {
+        PrimaryFire = false;
+        SeccondaryFire = false;
+        Reload = false;
+
         gameObject.SetActive(false);
+
+        return null;
     }
 
-    public void Equip()
+    public Coroutine Equip()
     {
         gameObject.SetActive(true);
+
+        return StartCoroutine(CoroutineUtility.Wait(equipTime));
     }
 }
 
@@ -68,12 +77,30 @@ public class ProjectileWeaponEffect
     public Projectile projectilePrefab;
     public float damage;
     public float speed;
+    public ParticleSystem[] fireFX;
 
     public void Execute (Weapon weapon)
     {
+        GameObject shooter = weapon.gameObject;
+        var avatarRoot = shooter.GetComponentInParent<IAvatarRoot>();
+        if (avatarRoot != null)
+        {
+            shooter = avatarRoot.gameObject;
+        }
+        else
+        {
+            var rigidbody = shooter.GetComponentInParent<Rigidbody>();
+            if (rigidbody)
+            {
+                shooter = rigidbody.gameObject;
+            }
+        }
+
         var projectileInstance = UnityEngine.Object.Instantiate(projectilePrefab, weapon.Muzzle.position, weapon.Muzzle.rotation);
         projectileInstance.Damage = damage;
         projectileInstance.Speed = speed;
+        projectileInstance.Shooter = shooter;
+        foreach (var fx in fireFX) fx.Play();
     }
 }
 
@@ -102,6 +129,8 @@ public class SingleFireWeaponTrigger
     }
 }
 
+
+[Serializable]
 public class AimWeaponEffect
 {
     [SerializeField] float aimSpeed;
@@ -109,15 +138,23 @@ public class AimWeaponEffect
     [SerializeField] float aimViewmodelFOV;
     [SerializeField] AnimationCurve aimCurve;
 
+    IBipedal biped;
     float aimPercent;
-
+    
     public void Loop (Weapon weapon, bool aimState)
     {
-        aimPercent = Mathf.MoveTowards(aimPercent, aimState ? 1.0f : 0.0f, aimSpeed * Time.deltaTime);
+        if (biped == null)
+        {
+            biped = weapon.GetComponentInParent<IBipedal>();
+        }
+        bool grounded = biped != null ? biped.IsGrounded : true;
+
+        aimPercent = Mathf.MoveTowards(aimPercent, (aimState && grounded) ? 1.0f : 0.0f, aimSpeed * Time.deltaTime);
         aimPercent = Mathf.Clamp01(aimPercent);
         weapon.Animator.SetFloat("aim", aimPercent);
 
-        PlayerCamera.Zoom = Mathf.Lerp(PlayerCamera.Zoom, aimZoom, aimPercent);
+        PlayerCamera.SetZoom(aimZoom);
+        PlayerCamera.FOVOverrideBlend = aimPercent;
         PlayerCamera.ViewmodelFOV = Mathf.Lerp(PlayerCamera.ViewmodelFOV, aimViewmodelFOV, aimPercent);
     }
 }

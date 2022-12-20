@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 
+[System.Serializable]
 public sealed class PlayerMovement : NestedBehaviour
 {
     [SerializeField] float moveSpeed = 10.0f;
@@ -48,7 +49,7 @@ public sealed class PlayerMovement : NestedBehaviour
         }
     }
 
-    public PlayerMovement(GameObject context) : base(context)
+    public PlayerMovement(MonoBehaviour context) : base(context)
     {
         DrivingRigidbody = context.GetComponent<Rigidbody>();
     }

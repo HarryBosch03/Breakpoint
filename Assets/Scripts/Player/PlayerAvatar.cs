@@ -1,25 +1,33 @@
 using System;
 using UnityEngine;
 using UnityEngine.Experimental.AI;
+using UnityEngine.Experimental.Rendering.Universal;
 using UnityEngine.InputSystem;
 
 [SelectionBase]
 [DisallowMultipleComponent]
-public sealed class PlayerAvatar : MonoBehaviour, IBipedal
+public sealed class PlayerAvatar : MonoBehaviour, IBipedal, IAvatarRoot
 {
     [SerializeField] InputActionAsset inputAsset;
 
     [Space]
     [SerializeField] Transform cameraContainter;
-
-    InputActionMap playerMap;
-    MovementState movementState;
+    [SerializeField] Transform weaponContainer;
+    [SerializeField] Cinemachine.CinemachineVirtualCamera fpCam;
+    [SerializeField] RenderObjects[] viewmodelRenderObjects;
 
     PlayerMovement movement;
     new PlayerCamera camera;
+    PlayerWeaponManager weaponManager;
+
+    InputActionMap playerMap;
+    PlayerState playerState;
 
     Vector2 moveDirection;
     bool jump;
+    bool primaryFire;
+    bool seccondaryFire;
+    bool reload;
 
     public bool IsGrounded => movement.IsGrounded;
 
@@ -30,11 +38,13 @@ public sealed class PlayerAvatar : MonoBehaviour, IBipedal
     {
         playerMap = inputAsset.FindActionMap("Player");
 
-        movement = new PlayerMovement(gameObject);
-        camera = new PlayerCamera(gameObject, cameraContainter);
+        movement = new PlayerMovement(this);
+        camera = new PlayerCamera(this, cameraContainter, fpCam, viewmodelRenderObjects);
 
         movement.MoveDirection = () => moveDirection;
         movement.Jump = () => jump;
+
+        weaponManager = new PlayerWeaponManager(this, weaponContainer, () => primaryFire, () => seccondaryFire, () => reload);
     }
 
     private void OnEnable()
@@ -51,9 +61,9 @@ public sealed class PlayerAvatar : MonoBehaviour, IBipedal
     {
         var ctx = new NestedBehaviourExecutionContext();
 
-        switch (movementState)
+        switch (playerState)
         {
-            case MovementState.OnFoot:
+            case PlayerState.OnFoot:
             default:
                 movement.Execute(ctx);
                 break;
@@ -66,22 +76,32 @@ public sealed class PlayerAvatar : MonoBehaviour, IBipedal
 
         ReadInputMap();
 
-        switch (movementState)
+        switch (playerState)
         {
-            case MovementState.OnFoot:
+            case PlayerState.OnFoot:
             default:
                 camera.Execute(ctx);
+                weaponManager.Execute(ctx);
                 break;
         }
     }
 
     private void ReadInputMap()
     {
+        System.Func<string, bool> getFlag = (s) =>
+        {
+            return playerMap.FindAction(s).ReadValue<float>() > 0.5f;
+        };
+
         moveDirection = playerMap.FindAction("move").ReadValue<Vector2>();
-        jump = playerMap.FindAction("jump").ReadValue<float>() > 0.5f;
+        jump = getFlag("jump");
+
+        primaryFire = getFlag("PrimaryFire");
+        seccondaryFire = getFlag("SeccondaryFire");
+        reload = getFlag("Reload");
     }
 
-    public enum MovementState
+    public enum PlayerState
     {
         OnFoot,
     }

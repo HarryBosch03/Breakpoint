@@ -3,22 +3,26 @@ using UnityEngine.InputSystem;
 using Cinemachine;
 using UnityEngine.Experimental.Rendering.Universal;
 
+[System.Serializable]
 public sealed class PlayerCamera : NestedBehaviour
 {
     [SerializeField] float sensitivity = 0.3f;
     [SerializeField] CinemachineVirtualCamera fpCam;
     [SerializeField] RenderObjects[] viewmodelRenderObjects;
-    [SerializeField] float baseFOV;
+    [SerializeField] float baseFOV = 100.0f;
 
     Transform camRotor;
     Vector2 ssRotation;
 
+    public static float FOVOverride { get; set; }
+    public static float FOVOverrideBlend { get; set; }
     public static float ViewmodelFOV { get; set; }
-    public static float Zoom { get; set; }
-
-    public PlayerCamera(GameObject context, Transform camRotor) : base(context)
+    
+    public PlayerCamera(MonoBehaviour context, Transform camRotor, CinemachineVirtualCamera fpCam, RenderObjects[] viewmodelRenderObjects) : base(context)
     {
         this.camRotor = camRotor;
+        this.fpCam = fpCam;
+        this.viewmodelRenderObjects = viewmodelRenderObjects;
     }
 
     protected override void OnExecute()
@@ -32,12 +36,17 @@ public sealed class PlayerCamera : NestedBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
 
-        fpCam.m_Lens.FieldOfView = Mathf.Atan(Mathf.Tan(baseFOV * Mathf.Deg2Rad * 0.5f) / Zoom) * Mathf.Rad2Deg * 2.0f;
+        fpCam.m_Lens.FieldOfView = Mathf.Lerp(baseFOV, FOVOverride, FOVOverrideBlend);
         foreach (var ro in viewmodelRenderObjects)
         {
             ro.settings.cameraSettings.cameraFieldOfView = ViewmodelFOV;
         }
 
-        Zoom = 1.0f;
+        FOVOverride = baseFOV;
+    }
+
+    public static void SetZoom(float zoom, float refFOV = 60.0f)
+    {
+        FOVOverride = Mathf.Atan(Mathf.Tan(refFOV * Mathf.Deg2Rad * 0.5f) / zoom) * Mathf.Rad2Deg * 2.0f;
     }
 }

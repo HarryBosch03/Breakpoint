@@ -1,16 +1,17 @@
+using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Runtime.InteropServices.WindowsRuntime;
 using UnityEngine;
 
-
-[SelectionBase]
-[DisallowMultipleComponent]
-public sealed class PlayerWeaponManager : MonoBehaviour
+[System.Serializable]
+public sealed class PlayerWeaponManager : NestedBehaviour
 {
-    [SerializeField] Transform weaponParent;
+    Transform weaponParent;
 
-    int switchLock;
+    Func<bool> getPrimaryFire;
+    Func<bool> getSeccondaryFire;
+    Func<bool> getReload;
+
+    bool switchLock;
 
     public int ActiveWeaponIndex { get; private set; }
     public Weapon ActiveWeapon => GetWeapon(ActiveWeaponIndex);
@@ -18,10 +19,17 @@ public sealed class PlayerWeaponManager : MonoBehaviour
     public int LastWeaponIndex { get; private set; }
     public Weapon LastWeapon => GetWeapon(LastWeaponIndex);
 
+    public PlayerWeaponManager(MonoBehaviour context, Transform weaponParent, Func<bool> getPrimaryFire, Func<bool> getSeccondaryFire, Func<bool> getReload) : base(context) 
+    {
+        this.weaponParent = weaponParent;
+        this.getPrimaryFire = getPrimaryFire;
+        this.getSeccondaryFire = getSeccondaryFire;
+        this.getReload = getReload;
+    }
+
     public Weapon GetWeapon(int i)
     {
-        if (i < 0) return null;
-        if (i >= weaponParent.childCount) return null;
+        if (!IsWeaponIndexValid(i)) return null;
 
         if (weaponParent.GetChild(i).TryGetComponent(out Weapon weapon))
         {
@@ -30,10 +38,49 @@ public sealed class PlayerWeaponManager : MonoBehaviour
         else return null;
     }
 
-    public void SwitchWeapon (int index)
+    public bool IsWeaponIndexValid(int i)
     {
-        if (ActiveWeapon) ActiveWeapon.Holster();
-        ActiveWeaponIndex = index;
-        if (ActiveWeapon) ActiveWeapon.Equip();
+        if (i == -1) return true;
+
+        if (i < 0) return false;
+        if (i > weaponParent.childCount) return false;
+
+        return true;
+    }
+
+    public void SwitchWeapon(int i)
+    {
+        Context.StartCoroutine(SwitchWeaponRoutine(i));
+    }
+
+    public IEnumerator SwitchWeaponRoutine(int i)
+    {
+        if (!IsWeaponIndexValid(i)) yield break;
+
+        if (switchLock) yield break;
+        switchLock = true;
+
+        if (ActiveWeapon)
+        {
+            yield return ActiveWeapon.Holster();
+        }
+
+        ActiveWeaponIndex = i;
+        if (ActiveWeapon)
+        {
+            yield return ActiveWeapon.Equip();
+        }
+
+        switchLock = false;
+    }
+
+    protected override void OnExecute()
+    {
+        if (ActiveWeapon)
+        {
+            ActiveWeapon.PrimaryFire = getPrimaryFire();
+            ActiveWeapon.SeccondaryFire = getSeccondaryFire();
+            ActiveWeapon.Reload = getReload();
+        }
     }
 }
