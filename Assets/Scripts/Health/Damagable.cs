@@ -1,10 +1,9 @@
-using System.Collections;
-using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 [SelectionBase]
 [DisallowMultipleComponent]
-public class Damagable : MonoBehaviour
+public class Damagable : NetworkBehaviour
 {
     [Header("DAMAGABLE")]
     public GameObject hitFX;

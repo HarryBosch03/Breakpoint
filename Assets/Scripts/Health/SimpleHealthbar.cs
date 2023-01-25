@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -22,27 +20,10 @@ public class SimpleHealthbar : MonoBehaviour
 
     private void OnEnable()
     {
-        target.DamageEvent += _ => UpdateHealthbar();
-
-        if (target is Health)
-        {
-            ((Health)target).RegenEvent += UpdateHealthbar;
-        }
-
         Color materialMeta = new Color(target.MaxHealth / 2550.0f, 0.1f, 0.0f, 1.0f);
         fill.color = materialMeta;
         lagFill.color = materialMeta;
         bgFill.color = materialMeta;
-    }
-
-    private void OnDisable()
-    {
-        target.DamageEvent -= _ => UpdateHealthbar();
-
-        if (target is Health)
-        {
-            ((Health)target).RegenEvent -= UpdateHealthbar;
-        }
     }
 
     private void Update()
@@ -55,10 +36,7 @@ public class SimpleHealthbar : MonoBehaviour
                 lagFill.fillAmount += (fill.fillAmount - lagFill.fillAmount) * Mathf.Min(lagDecay * Time.deltaTime, 1.0f);
             }
         }
-    }
 
-    protected virtual void UpdateHealthbar()
-    {
         fill.fillAmount = target.NormalizedHealth;
     }
 }

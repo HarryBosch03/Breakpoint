@@ -1,24 +1,30 @@
 using System;
-using Unity.Burst;
+using System.Collections;
+using Unity.Netcode;
 using UnityEngine;
 
 [SelectionBase]
 [DisallowMultipleComponent]
 public abstract class Weapon : MonoBehaviour
 {
-    [SerializeField] Animator animator;
-    [SerializeField] Transform muzzle;
     [SerializeField] float equipTime;
     [SerializeField] Transform root;
+    [SerializeField] Animator animator;
 
     [Space]
     [SerializeField] float viewmodelFOV;
 
+    [Space]
+    [SerializeField] GameObject model;
+    [SerializeField] int viewmodelOwnerLayer = 7;
+
     IBipedal biped;
+    Transform camRotor;
     float lastEnableTime;
+    protected PlayerCamera pcam;
 
     public Animator Animator => animator;
-    public Transform Muzzle => muzzle;
+    public Transform CameraRotor => camRotor;
     public Transform Root => root;
 
     public bool PrimaryFire { get; set; }
@@ -32,14 +38,29 @@ public abstract class Weapon : MonoBehaviour
         biped = GetComponentInParent<IBipedal>();
     }
 
-    private void OnEnable()
+    protected virtual void OnEnable()
     {
         lastEnableTime = Time.time;
     }
 
+    private void Start()
+    {
+        var networkObject = GetComponentInParent<NetworkObject>();
+        if (networkObject)
+        {
+            model.layer = networkObject.IsOwner ? viewmodelOwnerLayer : 0;
+        }
+    }
+
+    public void Initalize(Transform camRotor, PlayerCamera pcam)
+    {
+        this.camRotor = camRotor;
+        this.pcam = pcam;
+    }
+
     public void Update()
     {
-        PlayerCamera.ViewmodelFOV = viewmodelFOV;
+        pcam.ViewmodelFOV = viewmodelFOV;
 
         if (Time.time > lastEnableTime + equipTime)
         {
@@ -52,7 +73,7 @@ public abstract class Weapon : MonoBehaviour
         animator.SetBool("grounded", biped.IsGrounded);
     }
 
-    public Coroutine Holster()
+    public IEnumerator Holster()
     {
         PrimaryFire = false;
         SeccondaryFire = false;
@@ -63,11 +84,11 @@ public abstract class Weapon : MonoBehaviour
         return null;
     }
 
-    public Coroutine Equip()
+    public IEnumerator Equip()
     {
         gameObject.SetActive(true);
 
-        return StartCoroutine(CoroutineUtility.Wait(equipTime));
+        return CoroutineUtility.Wait(equipTime);
     }
 }
 
@@ -79,7 +100,7 @@ public class ProjectileWeaponEffect
     public float speed;
     public ParticleSystem[] fireFX;
 
-    public void Execute (Weapon weapon)
+    public void Execute(Weapon weapon)
     {
         GameObject shooter = weapon.gameObject;
         var avatarRoot = shooter.GetComponentInParent<IAvatarRoot>();
@@ -96,7 +117,7 @@ public class ProjectileWeaponEffect
             }
         }
 
-        var projectileInstance = UnityEngine.Object.Instantiate(projectilePrefab, weapon.Muzzle.position, weapon.Muzzle.rotation);
+        var projectileInstance = UnityEngine.Object.Instantiate(projectilePrefab, weapon.CameraRotor.position, weapon.CameraRotor.rotation);
         projectileInstance.Damage = damage;
         projectileInstance.Speed = speed;
         projectileInstance.Shooter = shooter;
@@ -112,7 +133,7 @@ public class SingleFireWeaponTrigger
     float lastShootTime;
     bool lastState;
 
-    public bool Check (bool inputState)
+    public bool Check(bool inputState)
     {
         if (inputState && !lastState && Time.time > lastShootTime + delay)
         {
@@ -123,9 +144,82 @@ public class SingleFireWeaponTrigger
         return false;
     }
 
-    public void OnFire ()
+    public void OnFire()
     {
         lastShootTime = Time.time;
+    }
+}
+
+[Serializable]
+public class FullAutoWeaponTrigger
+{
+    [SerializeField] float fireRate;
+
+    float lastShootTime;
+
+    public bool Check(bool inputState)
+    {
+        if (inputState && Time.time > lastShootTime + 60.0f / fireRate)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public void OnFire()
+    {
+        lastShootTime = Time.time;
+    }
+}
+
+[System.Serializable]
+public class WeaponMagazineCondition
+{
+    [SerializeField] int magazineSize;
+    [SerializeField] int currentMagazine;
+
+    [Space]
+    [SerializeField] float reloadTime;
+
+    public bool IsReloading { get; private set; }
+
+    public void OnEnable()
+    {
+        IsReloading = false;
+    }
+
+    public bool CanFire()
+    {
+        if (IsReloading) return false;
+        if (currentMagazine <= 0) return false;
+
+        return true;
+    }
+
+    public void OnFire()
+    {
+        currentMagazine--;
+    }
+
+    public void Reload(Weapon caller)
+    {
+        caller.StartCoroutine(ReloadRoutine(caller));
+    }
+
+    private IEnumerator ReloadRoutine(Weapon caller)
+    {
+        if (IsReloading) yield break;
+
+        IsReloading = true;
+        currentMagazine = 0;
+
+        if (caller.Animator.isActiveAndEnabled) caller.Animator.Play("Reload", 0, 0.0f);
+
+        yield return new WaitForSeconds(reloadTime);
+
+        currentMagazine = magazineSize;
+        IsReloading = false;
     }
 }
 
@@ -138,23 +232,53 @@ public class AimWeaponEffect
     [SerializeField] float aimViewmodelFOV;
     [SerializeField] AnimationCurve aimCurve;
 
-    IBipedal biped;
     float aimPercent;
-    
-    public void Loop (Weapon weapon, bool aimState)
+
+    public float AimPercent => aimCurve.Evaluate(aimPercent);
+
+    public void Loop(Weapon weapon, bool aimState, PlayerCamera camera)
     {
-        if (biped == null)
-        {
-            biped = weapon.GetComponentInParent<IBipedal>();
-        }
-        bool grounded = biped != null ? biped.IsGrounded : true;
-
-        aimPercent = Mathf.MoveTowards(aimPercent, (aimState && grounded) ? 1.0f : 0.0f, aimSpeed * Time.deltaTime);
+        aimPercent = Mathf.MoveTowards(aimPercent, (aimState) ? 1.0f : 0.0f, aimSpeed * Time.deltaTime);
         aimPercent = Mathf.Clamp01(aimPercent);
-        weapon.Animator.SetFloat("aim", aimPercent);
+        if (weapon.Animator.isActiveAndEnabled)
+        {
+            weapon.Animator.SetFloat("aim", AimPercent);
+            weapon.Animator.SetBool("aimState", aimState);
+        }
 
-        PlayerCamera.SetZoom(aimZoom);
-        PlayerCamera.FOVOverrideBlend = aimPercent;
-        PlayerCamera.ViewmodelFOV = Mathf.Lerp(PlayerCamera.ViewmodelFOV, aimViewmodelFOV, aimPercent);
+        camera.SetZoom(aimZoom);
+        camera.FOVOverrideBlend = aimPercent;
+        camera.ViewmodelFOV = Mathf.Lerp(camera.ViewmodelFOV, aimViewmodelFOV, aimPercent);
+    }
+}
+
+[System.Serializable]
+public class WeaponRedicle
+{
+    [SerializeField] CanvasGroup group;
+
+    public float FadeAmount { get => group.alpha; set => group.alpha = value; }
+    public float Size
+    {
+        get => ((RectTransform)group.transform).rect.width;
+        set
+        {
+            var transform = group.transform as RectTransform;
+            transform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, value);
+            transform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, value);
+        }
+    }
+}
+
+[System.Serializable]
+public class RecoilWeaponEffect
+{
+    [SerializeField] Vector2 recoilRangeX;
+    [SerializeField] Vector2 recoilRangeY;
+    [SerializeField] float recoilMagnitude;
+
+    public void AddRecoil(PlayerCamera camera)
+    {
+        camera.AddRecoil(new Vector2(Mathf.Lerp(recoilRangeX.x, recoilRangeX.y, UnityEngine.Random.value), Mathf.Lerp(recoilRangeY.x, recoilRangeY.y, UnityEngine.Random.value)) * recoilMagnitude);
     }
 }

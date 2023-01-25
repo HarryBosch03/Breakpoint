@@ -1,52 +1,62 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using Cinemachine;
 using UnityEngine.Experimental.Rendering.Universal;
+using Cinemachine;
 
 [System.Serializable]
 public sealed class PlayerCamera : NestedBehaviour
 {
     [SerializeField] float sensitivity = 0.3f;
-    [SerializeField] CinemachineVirtualCamera fpCam;
+    [SerializeField] CinemachineVirtualCamera camDriver;
     [SerializeField] RenderObjects[] viewmodelRenderObjects;
     [SerializeField] float baseFOV = 100.0f;
 
-    Transform camRotor;
-    Vector2 ssRotation;
+    [Space]
+    [SerializeField] float recoilDecay = 15.0f;
 
-    public static float FOVOverride { get; set; }
-    public static float FOVOverrideBlend { get; set; }
-    public static float ViewmodelFOV { get; set; }
+    public Vector2 SSRotation { get; set; }
+    Vector2 recoilForce;
+
+    public float FOVOverride { get; set; }
+    public float FOVOverrideBlend { get; set; }
+    public float ViewmodelFOV { get; set; }
     
-    public PlayerCamera(MonoBehaviour context, Transform camRotor, CinemachineVirtualCamera fpCam, RenderObjects[] viewmodelRenderObjects) : base(context)
+    private void OnAddRecoil(Vector2 force)
     {
-        this.camRotor = camRotor;
-        this.fpCam = fpCam;
-        this.viewmodelRenderObjects = viewmodelRenderObjects;
     }
 
-    protected override void OnExecute()
+    public void Process(MonoBehaviour caller, Transform camRotor, bool owner)
     {
-        ssRotation += Mouse.current.delta.ReadValue() * sensitivity;
-
-        ssRotation.y = Mathf.Clamp(ssRotation.y, -90.0f, 90.0f);
-
-        Context.transform.rotation = Quaternion.Euler(0.0f, ssRotation.x, 0.0f);
-        camRotor.rotation = Quaternion.Euler(-ssRotation.y, ssRotation.x, 0.0f);
-
-        Cursor.lockState = CursorLockMode.Locked;
-
-        fpCam.m_Lens.FieldOfView = Mathf.Lerp(baseFOV, FOVOverride, FOVOverrideBlend);
-        foreach (var ro in viewmodelRenderObjects)
+        if (owner)
         {
-            ro.settings.cameraSettings.cameraFieldOfView = ViewmodelFOV;
+            SSRotation += Mouse.current.delta.ReadValue() * sensitivity * camDriver.m_Lens.FieldOfView / baseFOV;
+            Cursor.lockState = CursorLockMode.Locked;
+            foreach (var ro in viewmodelRenderObjects)
+            {
+                ro.settings.cameraSettings.cameraFieldOfView = ViewmodelFOV;
+            }
         }
 
+        SSRotation = new Vector2(SSRotation.x, Mathf.Clamp(SSRotation.y, -90.0f, 90.0f));
+
+        caller.transform.rotation = Quaternion.Euler(0.0f, SSRotation.x, 0.0f);
+        camRotor.rotation = Quaternion.Euler(-SSRotation.y, SSRotation.x, 0.0f);
+
+        camDriver.m_Lens.FieldOfView = Mathf.Lerp(baseFOV, FOVOverride, FOVOverrideBlend);
+        
         FOVOverride = baseFOV;
+
+        recoilForce -= recoilForce * Mathf.Min(1.0f, recoilDecay * Time.deltaTime);
+        SSRotation += recoilForce * Time.deltaTime;
     }
 
-    public static void SetZoom(float zoom, float refFOV = 60.0f)
+    public void SetZoom(float zoom, float refFOV = 60.0f)
     {
         FOVOverride = Mathf.Atan(Mathf.Tan(refFOV * Mathf.Deg2Rad * 0.5f) / zoom) * Mathf.Rad2Deg * 2.0f;
+    }
+
+    public void AddRecoil (Vector2 force)
+    {
+        recoilForce += force;
     }
 }

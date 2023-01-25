@@ -100,7 +100,7 @@ Shader "Unlit/HealthUI"
 
                 col *= _Color;
 
-                return col;
+                return col * col.a;
             }
             ENDCG
         }

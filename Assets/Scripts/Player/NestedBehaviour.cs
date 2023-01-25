@@ -1,24 +1,6 @@
 using System.Collections.Generic;
-using UnityEngine;
 
-public abstract class NestedBehaviour
-{
-    public MonoBehaviour Context { get; private set; }
-
-    public NestedBehaviour (MonoBehaviour context)
-    {
-        Context = context;
-    }
-
-    public void Execute(NestedBehaviourExecutionContext context)
-    {
-        if (context.Mark(this)) return;
-
-        OnExecute();
-    }
-
-    protected abstract void OnExecute();
-}
+public abstract class NestedBehaviour { }
 
 public sealed class NestedBehaviourExecutionContext
 {
@@ -29,6 +11,12 @@ public sealed class NestedBehaviourExecutionContext
         bool state = executedBehaviours.Contains(behaviour);
         executedBehaviours.Add(behaviour);
         return state;
+    }
+
+    public void Execute<T> (T behaviour, System.Action<T> callback) where T : NestedBehaviour
+    {
+        if (Mark(behaviour)) return;
+        callback?.Invoke(behaviour);
     }
 
     public void Clear() => executedBehaviours.Clear();

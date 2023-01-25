@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 [SelectionBase]
@@ -7,6 +5,7 @@ using UnityEngine;
 [RequireComponent(typeof(Damagable))]
 public sealed class PaletteHitEffect : MonoBehaviour
 {
+    [SerializeField] float damageThreshold = 55.0f;
     [SerializeField] ParticleSystem[] fxPrefabs;
     [SerializeField] Vector2Int paletteIndex;
 
@@ -29,14 +28,17 @@ public sealed class PaletteHitEffect : MonoBehaviour
 
     private void OnDamage(DamageArgs args)
     {
-        foreach (var fxPrefab in fxPrefabs)
+        if (args.damage > damageThreshold)
         {
-            var instance = Instantiate(fxPrefab, args.point, Quaternion.LookRotation(args.normal));
+            foreach (var fxPrefab in fxPrefabs)
+            {
+                var instance = Instantiate(fxPrefab, args.point, Quaternion.LookRotation(args.normal));
 
-            var main = instance.main;
-            var startColor = main.startColor;
-            startColor.color = new Color(paletteIndex.x / 16.0f, paletteIndex.y / 16.0f, 0.0f, 1.0f);
-            main.startColor = startColor;
+                var main = instance.main;
+                var startColor = main.startColor;
+                startColor.color = new Color(paletteIndex.x / 16.0f, paletteIndex.y / 16.0f, 0.0f, 1.0f);
+                main.startColor = startColor;
+            }
         }
     }
 }

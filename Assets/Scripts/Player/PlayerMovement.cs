@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 [System.Serializable]
 public sealed class PlayerMovement : NestedBehaviour
@@ -28,7 +27,6 @@ public sealed class PlayerMovement : NestedBehaviour
     float lastJumpTime;
 
     public float MoveSpeed => moveSpeed;
-    public Rigidbody DrivingRigidbody { get; private set; }
 
     public float DistanceToGround { get; private set; }
     public bool IsGrounded => DistanceToGround < 0.0f;
@@ -37,98 +35,90 @@ public sealed class PlayerMovement : NestedBehaviour
 
     public Func<Vector2> MoveDirection { get; set; }
     public Func<bool> Jump { get; set; }
-    public Vector2 PlanarSpeed => new Vector2(DrivingRigidbody.velocity.x, DrivingRigidbody.velocity.z);
-    public Vector2 LocalPlanarSpeed
+    public Vector2 PlanarSpeed(Rigidbody rigidbody) => new Vector2(rigidbody.velocity.x, rigidbody.velocity.z);
+    public Vector2 LocalPlanarSpeed(Rigidbody rigidbody)
     {
-        get
-        {
-            if (!IsGrounded) return PlanarSpeed;
-            if (!GroundRigidbody) return PlanarSpeed;
+        if (!IsGrounded) return PlanarSpeed(rigidbody);
+        if (!GroundRigidbody) return PlanarSpeed(rigidbody);
 
-            return PlanarSpeed - new Vector2(GroundRigidbody.velocity.x, GroundRigidbody.velocity.z);
-        }
+        return PlanarSpeed(rigidbody) - new Vector2(GroundRigidbody.velocity.x, GroundRigidbody.velocity.z);
     }
 
-    public PlayerMovement(MonoBehaviour context) : base(context)
+    public void Process(Rigidbody rigidbody)
     {
-        DrivingRigidbody = context.GetComponent<Rigidbody>();
-    }
+        DistanceToGround = GetDistanceToGround(rigidbody) - springDistance;
 
-    protected override void OnExecute()
-    {
-        DistanceToGround = GetDistanceToGround() - springDistance;
-
-        MoveCharacter();
+        MoveCharacter(rigidbody);
 
         if (Jump() && !previousJumpState)
         {
-            TryJump();
+            TryJump(rigidbody);
         }
         previousJumpState = Jump();
 
-        ApplySpring();
-        ApplyGravity();
+        ApplySpring(rigidbody);
+        ApplyGravity(rigidbody);
     }
 
-    private void ApplySpring()
+    private void ApplySpring(Rigidbody rigidbody)
     {
         if (IsGrounded && Time.time > lastJumpTime + jumpSpringPauseTime)
         {
             float contraction = 1.0f - ((DistanceToGround + springDistance) / springDistance);
-            DrivingRigidbody.velocity += Vector3.up * contraction * springForce * Time.deltaTime;
-            DrivingRigidbody.velocity -= Vector3.up * DrivingRigidbody.velocity.y * springDamper * Time.deltaTime;
+            rigidbody.velocity += Vector3.up * contraction * springForce * Time.deltaTime;
+            rigidbody.velocity -= Vector3.up * rigidbody.velocity.y * springDamper * Time.deltaTime;
         }
     }
 
-    private void ApplyGravity()
+    private void ApplyGravity(Rigidbody rigidbody)
     {
-        DrivingRigidbody.useGravity = false;
-        DrivingRigidbody.velocity += GetGravity() * Time.deltaTime;
+        rigidbody.useGravity = false;
+        rigidbody.velocity += GetGravity(rigidbody) * Time.deltaTime;
     }
 
-    private void MoveCharacter()
+    private void MoveCharacter(Rigidbody rigidbody)
     {
         Vector2 input = MoveDirection();
-        Vector3 direction = Context.transform.TransformDirection(input.x, 0.0f, input.y);
+        Vector3 direction = rigidbody.transform.TransformDirection(input.x, 0.0f, input.y);
 
         if (IsGrounded)
         {
             Vector3 target = direction * moveSpeed;
-            Vector3 current = DrivingRigidbody.velocity;
+            Vector3 current = rigidbody.velocity;
 
             Vector3 delta = Vector3.ClampMagnitude(target - current, moveSpeed);
             delta.y = 0.0f;
 
             Vector3 force = delta / moveSpeed * groundAcceleration;
 
-            DrivingRigidbody.velocity += force * Time.deltaTime;
+            rigidbody.velocity += force * Time.deltaTime;
         }
         else
         {
-            DrivingRigidbody.velocity += direction * airMoveAcceleration * Time.deltaTime;
+            rigidbody.velocity += direction * airMoveAcceleration * Time.deltaTime;
         }
     }
 
-    private void TryJump()
+    private void TryJump(Rigidbody rigidbody)
     {
         if (IsGrounded)
         {
-            float gravity = Vector3.Dot(Vector3.down, GetGravity());
+            float gravity = Vector3.Dot(Vector3.down, GetGravity(rigidbody));
             float jumpForce = Mathf.Sqrt(2.0f * gravity * jumpHeight);
-            DrivingRigidbody.velocity = new Vector3(DrivingRigidbody.velocity.x, jumpForce, DrivingRigidbody.velocity.z);
+            rigidbody.velocity = new Vector3(rigidbody.velocity.x, jumpForce, rigidbody.velocity.z);
 
             lastJumpTime = Time.time;
         }
     }
 
-    private Vector3 GetGravity()
+    private Vector3 GetGravity(Rigidbody rigidbody)
     {
         float scale = upGravity;
         if (!Jump())
         {
             scale = downGravity;
         }
-        else if (DrivingRigidbody.velocity.y < 0.0f)
+        else if (rigidbody.velocity.y < 0.0f)
         {
             scale = downGravity;
         }
@@ -136,9 +126,9 @@ public sealed class PlayerMovement : NestedBehaviour
         return Physics.gravity * scale;
     }
 
-    public float GetDistanceToGround()
+    public float GetDistanceToGround(Rigidbody rigidbody)
     {
-        if (Physics.SphereCast(DrivingRigidbody.position + Vector3.up * groundCheckRadius, groundCheckRadius, Vector3.down, out var hit, 1000.0f, groundCheckMask))
+        if (Physics.SphereCast(rigidbody.position + Vector3.up * groundCheckRadius, groundCheckRadius, Vector3.down, out var hit, 1000.0f, groundCheckMask))
         {
             Ground = hit.transform.gameObject;
             GroundRigidbody = hit.rigidbody;

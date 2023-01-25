@@ -1,7 +1,4 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Xml.Serialization;
-using Cinemachine;
+using Unity.Netcode;
 using UnityEngine;
 
 [SelectionBase]
@@ -16,16 +13,16 @@ public class Health : SimpleHealth
     [SerializeField] protected DamageZone[] damageZones;
 
     [Space]
-    [SerializeField] int buffer = 0;
+    [SerializeField] NetworkVariable<int> buffer;
     [SerializeField] int maxBuffer = 0;
 
     [Space]
-    [SerializeField] float armor = 0.0f;
+    [SerializeField] NetworkVariable<float> armor;
 
     [Space]
     [SerializeField] float hardDamageThreshold = 50.0f;
     [SerializeField] float hardDamageMultiplier = 0.25f;
-    [SerializeField] float hardDamage = 0.0f;
+    [SerializeField] NetworkVariable<float> hardDamage;
     [SerializeField] float hardDamageMax = 0.9f;
 
     [Space]
@@ -35,11 +32,11 @@ public class Health : SimpleHealth
 
     public event System.Action RegenEvent;
 
-    public float HealthCeil => MaxHealth - hardDamage * MaxHealth;
+    public float HealthCeil => MaxHealth - hardDamage.Value * MaxHealth;
 
     private void Update()
     {
-        if (Time.time > LastDamageTime + regenDelay && CurrentHealth < HealthCeil)
+        if (Time.time > LastDamageTime + regenDelay && CurrentHealth < HealthCeil && IsServer)
         {
             if (CurrentHealth < 0.0f) CurrentHealth = 0.0f;
             CurrentHealth += regenRate * Time.deltaTime;
@@ -51,13 +48,19 @@ public class Health : SimpleHealth
 
     public override void Damage(DamageArgs args)
     {
-        if (buffer > 0)
+        if (!IsServer)
         {
-            buffer--;
+            base.Damage(args);
+            return;
+        }
+
+        if (buffer.Value > 0)
+        {
+            buffer.Value--;
             args.damage = 0.0f;
         }
 
-        args.damage = Mathf.Max(args.damage - armor / 2.0f, 1.0f);
+        args.damage = Mathf.Max(args.damage - armor.Value / 2.0f, 1.0f);
 
         args.damage = Mathf.Min(args.damage, MaxHealth * maxDamagePercent);
 
@@ -68,8 +71,8 @@ public class Health : SimpleHealth
 
         if (args.damage > hardDamageThreshold)
         {
-            hardDamage += args.damage * hardDamageMultiplier / MaxHealth;
-            if (hardDamage > hardDamageMax) hardDamage = hardDamageMax;
+            hardDamage.Value += args.damage * hardDamageMultiplier / MaxHealth;
+            if (hardDamage.Value > hardDamageMax) hardDamage.Value = hardDamageMax;
         }
 
         base.Damage(args);

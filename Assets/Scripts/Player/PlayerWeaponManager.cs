@@ -1,15 +1,12 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem.Interactions;
 
 [System.Serializable]
 public sealed class PlayerWeaponManager : NestedBehaviour
 {
     Transform weaponParent;
-
-    Func<bool> getPrimaryFire;
-    Func<bool> getSeccondaryFire;
-    Func<bool> getReload;
 
     bool switchLock;
 
@@ -19,18 +16,25 @@ public sealed class PlayerWeaponManager : NestedBehaviour
     public int LastWeaponIndex { get; private set; }
     public Weapon LastWeapon => GetWeapon(LastWeaponIndex);
 
-    public PlayerWeaponManager(MonoBehaviour context, Transform weaponParent, Func<bool> getPrimaryFire, Func<bool> getSeccondaryFire, Func<bool> getReload) : base(context) 
+    public void Initalize(MonoBehaviour caller, Transform weaponParent, Transform camRotor, PlayerCamera pcam)
     {
         this.weaponParent = weaponParent;
-        this.getPrimaryFire = getPrimaryFire;
-        this.getSeccondaryFire = getSeccondaryFire;
-        this.getReload = getReload;
+
+        for (int i = 0; i < weaponParent.childCount; i++)
+        {
+            var weapon = weaponParent.GetChild(i).GetComponent<Weapon>();
+            weapon.gameObject.SetActive(false);
+            weapon.Initalize(camRotor, pcam);
+        }
+
+        ActiveWeaponIndex = -1;
+        SwitchWeapon(caller, 0);
     }
 
     public Weapon GetWeapon(int i)
     {
         if (!IsWeaponIndexValid(i)) return null;
-
+        
         if (weaponParent.GetChild(i).TryGetComponent(out Weapon weapon))
         {
             return weapon;
@@ -40,47 +44,51 @@ public sealed class PlayerWeaponManager : NestedBehaviour
 
     public bool IsWeaponIndexValid(int i)
     {
-        if (i == -1) return true;
-
         if (i < 0) return false;
-        if (i > weaponParent.childCount) return false;
+        if (i >= weaponParent.childCount) return false;
 
         return true;
     }
 
-    public void SwitchWeapon(int i)
+    public void SwitchWeapon(MonoBehaviour caller, int i)
     {
-        Context.StartCoroutine(SwitchWeaponRoutine(i));
+        caller.StartCoroutine(SwitchWeaponRoutine(caller, i));
     }
 
-    public IEnumerator SwitchWeaponRoutine(int i)
+    public IEnumerator SwitchWeaponRoutine(MonoBehaviour caller, int i)
     {
-        if (!IsWeaponIndexValid(i)) yield break;
+        if (!IsWeaponIndexValid(i) && i != -1) yield break;
+        if (i == ActiveWeaponIndex) yield break;
 
         if (switchLock) yield break;
         switchLock = true;
 
         if (ActiveWeapon)
         {
-            yield return ActiveWeapon.Holster();
+            var action = ActiveWeapon.Holster();
+            if (action != null) yield return caller.StartCoroutine(action);
         }
 
         ActiveWeaponIndex = i;
+        Debug.Log(ActiveWeaponIndex);
         if (ActiveWeapon)
         {
-            yield return ActiveWeapon.Equip();
+            var action = ActiveWeapon.Equip();
+            if (action != null) yield return caller.StartCoroutine(action);
         }
 
         switchLock = false;
     }
 
-    protected override void OnExecute()
+    public void Process(MonoBehaviour caller, bool primaryFire, bool seccondaryFire, bool reload, int selectedWeapon)
     {
+        SwitchWeapon(caller, selectedWeapon);
+
         if (ActiveWeapon)
         {
-            ActiveWeapon.PrimaryFire = getPrimaryFire();
-            ActiveWeapon.SeccondaryFire = getSeccondaryFire();
-            ActiveWeapon.Reload = getReload();
+            ActiveWeapon.PrimaryFire = primaryFire;
+            ActiveWeapon.SeccondaryFire = seccondaryFire;
+            ActiveWeapon.Reload = reload;
         }
     }
 }

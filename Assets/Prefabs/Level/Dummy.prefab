@@ -341,6 +341,7 @@ GameObject:
   m_Component:
   - component: {fileID: 9185782632165275369}
   - component: {fileID: 1803113346}
+  - component: {fileID: 1803113347}
   m_Layer: 0
   m_Name: Dummy
   m_TagString: Untagged
@@ -378,7 +379,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   hitFX: {fileID: 0}
-  normalizedHealth: 1
+  normalizedHealth:
+    m_InternalValue: 0
   maxHealth: 100
   disableOnDeath: 0
   maxDamagePercent: 1
@@ -388,16 +390,35 @@ MonoBehaviour:
       m_Extent: {x: 0.6, y: 0.6, z: 0.6}
     parent: {fileID: 9185782633011434858}
     damageScaling: 10
-  buffer: 0
+  buffer:
+    m_InternalValue: 0
   maxBuffer: 0
-  armor: 0
+  armor:
+    m_InternalValue: 0
   hardDamageThreshold: 25
   hardDamageMultiplier: 0.25
-  hardDamage: 0
+  hardDamage:
+    m_InternalValue: 0
   hardDamageMax: 0.9
   regenDelay: 3
   regenRate: 10
   regenAcceleration: 200
+--- !u!114 &1803113347
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9185782632165275368}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  GlobalObjectIdHash: 951099334
+  AlwaysReplicateAsRoot: 0
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
 --- !u!1 &9185782632604278443
 GameObject:
   m_ObjectHideFlags: 0

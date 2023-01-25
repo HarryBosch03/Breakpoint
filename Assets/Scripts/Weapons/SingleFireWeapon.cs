@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 [SelectionBase]
@@ -11,6 +10,9 @@ public sealed class SingleFireWeapon : Weapon
     [SerializeField] SingleFireWeaponTrigger trigger;
     [SerializeField] AimWeaponEffect aiming;
     [SerializeField] WeaponSway sway;
+    [SerializeField] WeaponRedicle redicle;
+    [SerializeField] float defaultRedicleSize;
+    [SerializeField] RecoilWeaponEffect recoil;
 
     protected override void Awake()
     {
@@ -28,6 +30,8 @@ public sealed class SingleFireWeapon : Weapon
     private void LateUpdate()
     {
         sway.LateLoop();
+        redicle.FadeAmount = 1.0f - aiming.AimPercent;
+        redicle.Size = Mathf.Lerp(defaultRedicleSize, 0.0f, aiming.AimPercent);
     }
 
     private void CheckPrimaryFire()
@@ -36,12 +40,13 @@ public sealed class SingleFireWeapon : Weapon
 
         effect.Execute(this);
         trigger.OnFire();
+        recoil.AddRecoil(pcam);
 
-        Animator.Play("Fire", 0, 0.0f);
+        if (Animator.isActiveAndEnabled) Animator.Play("Fire", 0, 0.0f);
     }
 
     private void CheckSeccondaryFire()
     {
-        aiming.Loop(this, SeccondaryFire);
+        aiming.Loop(this, SeccondaryFire, pcam);
     }
 }

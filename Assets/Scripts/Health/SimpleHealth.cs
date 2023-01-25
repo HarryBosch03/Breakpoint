@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEditor.Experimental.GraphView;
+using Unity.Netcode;
 using UnityEngine;
 
 [SelectionBase]
@@ -10,37 +8,75 @@ public class SimpleHealth : Damagable
 {
     [Space]
     [Header("SIMPLE HEALTH")]
-    [SerializeField][Range(0.0f, 1.0f)] float normalizedHealth;
+    [SerializeField] NetworkVariable<float> normalizedHealth = new NetworkVariable<float>();
     [SerializeField] float maxHealth;
     [SerializeField] bool disableOnDeath;
 
-    public float LastDamageTime { get; set; }
+    public event System.Action<DamageArgs> DeathEvent;
+    NetworkVariable<float> lastDamageTime = new NetworkVariable<float>();
+
+    public float LastDamageTime => lastDamageTime.Value;
 
     public float CurrentHealth
     {
-        get => normalizedHealth * maxHealth;
-        set => normalizedHealth = Mathf.Min(value / maxHealth, 1.0f);
+        get => normalizedHealth.Value * maxHealth;
+        set => normalizedHealth.Value = Mathf.Min(value / maxHealth, 1.0f);
     }
-    public float MaxHealth { get => maxHealth; set => maxHealth = value; }
-    public float NormalizedHealth => normalizedHealth;
+    public float MaxHealth
+    {
+        get => maxHealth;
+        set
+        {
+            if (!IsServer) return;
+            maxHealth = value;
+        }
+    }
+    public float NormalizedHealth => normalizedHealth.Value;
+
+    private void OnEnable()
+    {
+        if (!IsServer) return;
+        normalizedHealth.Value = 1.0f;
+    }
 
     public override void Damage(DamageArgs args)
     {
-        LastDamageTime = Time.time;
-
-        CurrentHealth -= args.damage;
-
         base.Damage(args);
 
-        if (CurrentHealth < 0.0f)
+        if (IsServer)
         {
-            Die(args);
+            CurrentHealth -= args.damage;
+            lastDamageTime.Value = Time.time;
+
+            if (CurrentHealth < 0.0f)
+            {
+                Die(args);
+            }
         }
     }
 
     public virtual void Die(DamageArgs args)
     {
-        if (disableOnDeath) gameObject.SetActive(false);
-        else Destroy(gameObject);
+        if (!IsServer) return;
+
+        DeathEvent?.Invoke(args);
+
+        if (disableOnDeath)
+        {
+            gameObject.SetActive(false);
+            DieClientRPC();
+        }
+        else
+        {
+            NetworkObject.Despawn();
+        }
+    }
+
+    [ClientRpc]
+    private void DieClientRPC()
+    {
+        if (IsServer) return;
+
+        gameObject.SetActive(false);
     }
 }

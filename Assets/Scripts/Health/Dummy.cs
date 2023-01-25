@@ -1,6 +1,3 @@
-using System;
-using UnityEngine;
-
 public sealed class Dummy : Health
 {
     public override void Die(DamageArgs args) { }
